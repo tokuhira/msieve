@@ -9,10 +9,9 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.	
 
-$Id$
+$Id: size_score.c 1025 2018-08-19 02:20:28Z jasonp_sf $
 --------------------------------------------------------------------*/
 
-#include <polyroot.h>
 #include "poly.h"
 
 #if MAX_POLY_DEGREE > 8
@@ -382,8 +381,8 @@ static double eval_dpoly(dpoly_t *poly,
 	uint32 i, j, k;
 	uint32 deg = poly->degree;
 	double *coeff = poly->coeff;
-	double xbinom[MAX_POLY_DEGREE][MAX_POLY_DEGREE+1];
-	double ybinom[MAX_POLY_DEGREE][MAX_POLY_DEGREE+1];
+	double xbinom[MAX_POLY_DEGREE+1][MAX_POLY_DEGREE+1];
+	double ybinom[MAX_POLY_DEGREE+1][MAX_POLY_DEGREE+1];
 	double sum[MAX_POLY_DEGREE+1];
 	double *xrow, *yrow;
 	double res;
@@ -531,7 +530,7 @@ uint32 analyze_poly_murphy(integrate_t *integ_aux, dickman_t *dickman_aux,
 			uint32 *num_real_roots) {
 
 	/* Given the skewness and root score for an NFS polynomial
-	   pair, calculate the probability that an anverage sieve 
+	   pair, calculate the probability that an average sieve 
 	   value in the sieving region has all rational (resp. algebraic)
 	   factors less than rfb_limit (resp. afb_limit) 
 	 

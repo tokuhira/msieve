@@ -9,7 +9,7 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.	
 
-$Id$
+$Id: merge.c 1020 2018-05-18 13:33:21Z jasonp_sf $
 --------------------------------------------------------------------*/
 
 #include "filter_priv.h"
@@ -58,11 +58,11 @@ static void matrix_weight_sub(matrix_weight_t *m, relation_set_t *r) {
 	m->weights[w]--;
 }
 
-static uint32 get_matrix_weight(matrix_weight_t *m, uint32 target_cycles) {
+static uint64 get_matrix_weight(matrix_weight_t *m, uint32 target_cycles) {
 
 	uint32 i;
 	uint32 total_cycles = 0;
-	uint32 total_weight = 0;
+	uint64 total_weight = 0;
 
 	for (i = 0; total_cycles < target_cycles &&
 				i < m->num_weights_alloc; i++) {
@@ -330,9 +330,8 @@ static uint32 store_next_relset_group(merge_aux_t *aux,
 
 /*--------------------------------------------------------------------*/
 #define NUM_CYCLE_BINS 9
-#define TARGET_DENSITY 70.0
 
-void filter_merge_full(msieve_obj *obj, merge_t *merge, uint32 min_cycles) {
+int32 filter_merge_full(msieve_obj *obj, merge_t *merge, uint32 min_cycles) {
 
 	/* The core of the NFS merge phase; this routine starts
 	   with a collection of relation sets, each containing entries
@@ -429,9 +428,10 @@ void filter_merge_full(msieve_obj *obj, merge_t *merge, uint32 min_cycles) {
 	heap_t inactive_heap;
 	ideal_list_t ideal_list;
 	merge_aux_t *aux;
-	uint32 total_cycle_weight;
+	uint64 total_cycle_weight = 0;
 	uint32 cycle_bins[NUM_CYCLE_BINS + 2] = {0};
 	uint32 max_cycles;
+	int32 status = 0;
 
 	logprintf(obj, "commencing full merge\n");
 
@@ -450,7 +450,7 @@ void filter_merge_full(msieve_obj *obj, merge_t *merge, uint32 min_cycles) {
 	/* add each relation set to the heaps, and count the
 	   total relation set weight */
 
-	for (i = num_cycles = total_cycle_weight = 0; i < num_relsets; i++) {
+	for (i = num_cycles = 0; i < num_relsets; i++) {
 		if (heap_add_relset(&active_heap, &inactive_heap,
 				&ideal_list, relset_array + i, i, 0) == 0) {
 			num_cycles++;
@@ -497,7 +497,7 @@ void filter_merge_full(msieve_obj *obj, merge_t *merge, uint32 min_cycles) {
 							&mat_weight, 
 							target_cycles) / 
 							target_cycles;
-				if (avg_cycle_weight >= TARGET_DENSITY)
+				if (avg_cycle_weight >= merge->target_density)
 					break;
 			}
 
@@ -622,7 +622,8 @@ void filter_merge_full(msieve_obj *obj, merge_t *merge, uint32 min_cycles) {
 	if (num_cycles < 0.8 * target_cycles) {
 		logprintf(obj, "too few cycles, matrix probably "
 				"cannot build\n");
-		exit(0); /* a non-zero exit code aborts factMsieve.pl */
+		status = 1;
+		goto clean_up;
 	}
 
 	qsort(relset_array, (size_t)num_cycles, 
@@ -646,7 +647,7 @@ void filter_merge_full(msieve_obj *obj, merge_t *merge, uint32 min_cycles) {
 
 	/* print statistics on the final collection of cycles */
 
-	for (i = total_cycle_weight = max_cycles = 0; i < num_cycles; i++) {
+	for (i = max_cycles = 0; i < num_cycles; i++) {
 		relation_set_t *r = relset_array + i;
 		total_cycle_weight += r->num_small_ideals;
 		max_cycles = MAX(max_cycles, r->num_relations);
@@ -659,7 +660,8 @@ void filter_merge_full(msieve_obj *obj, merge_t *merge, uint32 min_cycles) {
 
 	merge->avg_cycle_weight = (double)total_cycle_weight / num_cycles;
 	merge->max_relations = max_cycles;
-	logprintf(obj, "weight of %u cycles is about %u (%.2f/cycle)\n",
+	logprintf(obj, "weight of %u cycles is about %" PRIu64 
+			" (%.2f/cycle)\n",
 			num_cycles, total_cycle_weight, 
 			merge->avg_cycle_weight);
 	logprintf(obj, "distribution of cycle lengths:\n");
@@ -669,10 +671,11 @@ void filter_merge_full(msieve_obj *obj, merge_t *merge, uint32 min_cycles) {
 	logprintf(obj, "heaviest cycle: %u relations\n", max_cycles);
 
 	/* clean up */
-
+clean_up:
 	matrix_weight_free(&mat_weight);
 	heap_free(&active_heap);
 	heap_free(&inactive_heap);
 	ideal_list_free(&ideal_list);
 	free(aux);
+	return status;
 }

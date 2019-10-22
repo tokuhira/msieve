@@ -9,7 +9,7 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.	
 
-$Id$
+$Id: sqrt.h 638 2011-09-11 15:31:19Z jasonp_sf $
 --------------------------------------------------------------------*/
 
 #ifndef _GNFS_SQRT_SQRT_H_
@@ -21,14 +21,14 @@ $Id$
 extern "C" {
 #endif
 
-uint32 get_prime_for_sqrt(mp_poly_t *alg_poly,
+uint32 get_prime_for_sqrt(mpz_poly_t *alg_poly,
 			  uint32 min_value,
 			  uint32 *q_out); 
 
-void alg_square_root(msieve_obj *obj, mp_poly_t *monic_alg_poly, 
-			mp_t *n, mp_t *c, signed_mp_t *m1, signed_mp_t *m0,
-			abpair_t *rlist, uint32 num_relations, uint32 check_q,
-			mp_t *sqrt_a);
+void alg_square_root(msieve_obj *obj, mpz_poly_t *monic_alg_poly, 
+			mpz_t n, mpz_t c, mpz_t m1, mpz_t m0,
+			abpair_t *rlist, uint32 num_relations, 
+			uint32 check_q, mpz_t sqrt_a);
 
 #ifdef __cplusplus
 }

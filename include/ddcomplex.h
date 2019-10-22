@@ -9,7 +9,7 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.	
 
-$Id$
+$Id: ddcomplex.h 32 2009-07-28 13:03:52Z jasonp_sf $
 --------------------------------------------------------------------*/
 
 #ifndef _DDCOMPLEX_H_

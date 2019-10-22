@@ -9,7 +9,7 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.	
 
-$Id$
+$Id: filter.c 1023 2018-08-19 00:30:42Z jasonp_sf $
 --------------------------------------------------------------------*/
 
 #include "filter.h"
@@ -152,7 +152,14 @@ static void set_filtering_bounds(msieve_obj *obj, factor_base_t *fb,
 
 #define FINAL_EXCESS_FRACTION 1.16
 
-static uint32 do_merge(msieve_obj *obj, filter_t *filter, merge_t *merge) {
+/* the default expected number of sparse nonzeros in the
+   average matrix column (may be overriden if you know
+   what you are doing) */
+
+#define DEFAULT_TARGET_DENSITY 90.0
+
+static uint32 do_merge(msieve_obj *obj, filter_t *filter, 
+			merge_t *merge, double target_density) {
 
 	uint32 relations_needed;
 	uint32 extra_needed = filter->target_excess;
@@ -173,7 +180,13 @@ static uint32 do_merge(msieve_obj *obj, filter_t *filter, merge_t *merge) {
 
 	merge->num_extra_relations = NUM_EXTRA_RELATIONS;
 
-	filter_make_relsets(obj, filter, merge, extra_needed);
+	merge->target_density = DEFAULT_TARGET_DENSITY;
+	if (target_density != 0)
+		merge->target_density = target_density;
+
+	if (filter_make_relsets(obj, filter, merge, extra_needed) != 0)
+		return 1000000;
+
 	return 0;
 }
 
@@ -182,15 +195,17 @@ static uint32 do_merge(msieve_obj *obj, filter_t *filter, merge_t *merge) {
 
 static uint32 do_partial_filtering(msieve_obj *obj, filter_t *filter,
 				merge_t *merge, uint32 entries_r,
-				uint32 entries_a) {
+				uint32 entries_a, double target_density,
+				uint32 max_weight) {
 
 	uint32 relations_needed;
-	uint32 max_weight = 20;
 	uint32 num_relations = filter->num_relations;
 	uint32 num_ideals = filter->num_ideals;
 
-	if (filter->num_relations < 20000000)
+	if (filter->num_relations < 20000000 && max_weight < 25) {
+		logprintf(obj, "raising initial max weight because there are few relations\n");
 		max_weight = 25;
+	}
 
 	for (; max_weight < MAX_KEEP_WEIGHT; max_weight += 5) {
 
@@ -200,58 +215,114 @@ static uint32 do_partial_filtering(msieve_obj *obj, filter_t *filter,
 
 		filter_read_lp_file(obj, filter, max_weight);
 
-		if ((relations_needed = do_merge(obj, filter, merge)) > 0)
+		if ((relations_needed = do_merge(obj, filter, 
+						merge, target_density)) > 0)
 			return relations_needed;
 
-		/* retry the filtering with more aggressive
-		   settings if the clique max weight was 
-		   small and the largest number of relations 
-		   in a relation set is close to the clique 
-		   max weight. This is an indication that the 
-		   clique processing ignored too many ideals 
-		   that the merge phase should have seen */
+		/* accept the collection of generated cycles 
+		   if the matrix they form is dense enough or
+		   max_weight has been incremented enough */
 
-		if (filter->max_ideal_weight < 18 &&
-		    merge->max_relations > filter->max_ideal_weight - 3) {
-			logprintf(obj, "matrix can improve, retrying\n");
-			filter_free_relsets(merge);
-			continue;
-		}
-
-		/* do not accept the collection of generated cycles 
-		   unless the matrix they form is dense enough */
-
-		if (merge->avg_cycle_weight > 63.0)
+		if (merge->avg_cycle_weight > 63.0 ||
+		    max_weight >= MAX_KEEP_WEIGHT - 5) 
 			break;
 
 		logprintf(obj, "matrix not dense enough, retrying\n");
 		filter_free_relsets(merge);
 	}
 
-	if (max_weight >= MAX_KEEP_WEIGHT) {
-		printf("error: too many merge attempts\n");
-		exit(-1);
-	}
 	return 0;
 }
 
 /*--------------------------------------------------------------------*/
-uint32 nfs_filter_relations(msieve_obj *obj, mp_t *n) {
+uint32 nfs_filter_relations(msieve_obj *obj, mpz_t n) {
 
 	filter_t filter;
 	merge_t merge;
 	uint32 filtmin_r, filtmin_a;
 	uint32 entries_r, entries_a;
 	uint32 num_relations;
-	uint32 relations_needed;
+	uint32 relations_needed = 0;
 	factor_base_t fb;
 	time_t wall_time = time(NULL);
 	uint64 savefile_size = get_file_size(obj->savefile.name);
-	uint64 ram_size = (uint64)obj->mem_mb * 1048576;
+	uint64 ram_size = 0;
+	uint32 max_relations = 0;
+	uint32 filter_bound = 0;
+	double target_density = 0;
+	uint32 max_weight = 20;
 	char lp_filename[256];
 
 	logprintf(obj, "\n");
 	logprintf(obj, "commencing relation filtering\n");
+
+	/* parse arguments */
+
+	if (obj->nfs_args != NULL) {
+
+		const char *tmp;
+
+		tmp = strstr(obj->nfs_args, "filter_mem_mb=");
+		if (tmp != NULL) {
+			ram_size = strtoull(tmp + 14, NULL, 10) << 20;
+			logprintf(obj, "setting memory use to %.1f MB\n",
+					(double)ram_size / 1048576);
+		}
+
+		tmp = strstr(obj->nfs_args, "filter_maxrels=");
+		if (tmp != NULL) {
+			max_relations = strtoul(tmp + 15, NULL, 10);
+			logprintf(obj, "setting max relations to %u\n",
+					max_relations);
+		}
+
+		tmp = strstr(obj->nfs_args, "filter_lpbound=");
+		if (tmp != NULL) {
+			filter_bound = strtoul(tmp + 15, NULL, 10);
+			logprintf(obj, "setting large prime bound to %u\n",
+					filter_bound);
+		}
+
+		tmp = strstr(obj->nfs_args, "target_density=");
+		if (tmp != NULL) {
+			target_density = strtod(tmp + 15, NULL);
+			logprintf(obj, "setting target matrix density to %.1f\n",
+					target_density);
+		}
+
+		tmp = strstr(obj->nfs_args, "max_weight=");
+		if (tmp != NULL) {
+			max_weight = strtoul(tmp + 11, NULL, 10);
+			if (max_weight < MAX_KEEP_WEIGHT) {
+				logprintf(obj, "setting initial max weight to %u\n",
+						max_weight);
+			}
+			else {
+#define str(s) #s
+#define xstr(s) str(s)
+				logprintf(obj, "initial max weight must be <= " xstr(MAX_KEEP_WEIGHT) "\n");
+#undef xstr
+#undef str
+				exit(-1);
+			}
+		}
+
+		/* old-style 'X,Y' format */
+
+		tmp = strchr(obj->nfs_args, ',');
+		if (tmp != NULL) {
+			const char *tmp0 = tmp - 1;
+			while (tmp0 > obj->nfs_args && isdigit(tmp0[-1]))
+				tmp0--;
+			max_relations = strtoul(tmp + 1, NULL, 10);
+			filter_bound = strtoul(tmp0, NULL, 10);
+
+			logprintf(obj, "setting max relations to %u\n",
+					max_relations);
+			logprintf(obj, "setting large prime bound to %u\n",
+					filter_bound);
+		}
+	}
 
 	if (ram_size == 0)
 		ram_size = get_ram_size();
@@ -259,6 +330,8 @@ uint32 nfs_filter_relations(msieve_obj *obj, mp_t *n) {
 	memset(&filter, 0, sizeof(filter));
 	memset(&merge, 0, sizeof(merge));
 	memset(&fb, 0, sizeof(fb));
+	mpz_poly_init(&fb.rfb.poly);
+	mpz_poly_init(&fb.afb.poly);
 	if (read_poly(obj, n, &fb.rfb.poly, &fb.afb.poly, NULL)) {
 		printf("filtering failed to read polynomials\n");
 		exit(-1);
@@ -269,8 +342,9 @@ uint32 nfs_filter_relations(msieve_obj *obj, mp_t *n) {
 	/* delete duplicate relations */
 
 	filtmin_r = filtmin_a = nfs_purge_duplicates(obj, &fb, 
-					(uint32)obj->nfs_upper,
-					&num_relations);
+					max_relations, &num_relations);
+	if (filter_bound > 0)
+		filtmin_r = filtmin_a = filter_bound;
 
 	/* set up the first disk-based pass; if the dataset is
 	   "small", this will be the only such pass */
@@ -284,8 +358,8 @@ uint32 nfs_filter_relations(msieve_obj *obj, mp_t *n) {
 	   once they are all in memory. If the dataset is large,
 	   first delete most of the singletons from the disk file */
 
-	nfs_write_lp_file(obj, &fb, &filter, 
-			(uint32)obj->nfs_upper, 0);
+	nfs_write_lp_file(obj, &fb, &filter, max_relations, 0);
+
 	if (filter.lp_file_size > ram_size / 2) {
 		filter_purge_lp_singletons(obj, &filter, ram_size);
 #if 0
@@ -306,8 +380,9 @@ uint32 nfs_filter_relations(msieve_obj *obj, mp_t *n) {
 		   Depending on how much memory the machine has, really
 		   big datasets may get to do this */
 
-		if ((relations_needed = do_merge(obj, &filter, &merge)) > 0)
-			return relations_needed;
+		if ((relations_needed = do_merge(obj, &filter, 
+						&merge, target_density)) > 0)
+			goto finished;
 	}
 	else {  
 		/* dataset is "large", perform multiple singleton passes.
@@ -325,8 +400,7 @@ uint32 nfs_filter_relations(msieve_obj *obj, mp_t *n) {
 		free(filter.relation_array);
 		filter.relation_array = NULL;
 
-		nfs_write_lp_file(obj, &fb, &filter, 
-				(uint32)obj->nfs_upper, 1);
+		nfs_write_lp_file(obj, &fb, &filter, max_relations, 1);
 
 		if (filter.lp_file_size < ram_size / 2) {
 
@@ -335,8 +409,8 @@ uint32 nfs_filter_relations(msieve_obj *obj, mp_t *n) {
 
 			filter_read_lp_file(obj, &filter, 0);
 			if ((relations_needed = do_merge(obj, &filter, 
-							&merge)) > 0) {
-				return relations_needed;
+						&merge, target_density)) > 0) {
+				goto finished;
 			}
 		}
 		else {
@@ -349,8 +423,9 @@ uint32 nfs_filter_relations(msieve_obj *obj, mp_t *n) {
 
 			if ((relations_needed = do_partial_filtering(obj,
 						&filter, &merge, entries_r,
-						entries_a)) > 0) {
-				return relations_needed;
+						entries_a, target_density,
+						max_weight)) > 0) {
+				goto finished;
 			}
 		}
 	}
@@ -367,5 +442,8 @@ uint32 nfs_filter_relations(msieve_obj *obj, mp_t *n) {
 	filter_free_relsets(&merge);
 	wall_time = time(NULL) - wall_time;
 	logprintf(obj, "RelProcTime: %u\n", (uint32)wall_time);
-	return 0;
+finished:
+	mpz_poly_free(&fb.rfb.poly);
+	mpz_poly_free(&fb.afb.poly);
+	return relations_needed;
 }

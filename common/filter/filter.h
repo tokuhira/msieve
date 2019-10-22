@@ -9,7 +9,7 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.	
 
-$Id$
+$Id: filter.h 1020 2018-05-18 13:33:21Z jasonp_sf $
 --------------------------------------------------------------------*/
 
 /* implementation of relation filtering, using an intermediate
@@ -98,6 +98,7 @@ typedef struct {
 	uint32 num_ideals;            /* number of unique ideals that must
 					 be merged */
 	uint32 num_extra_relations;   /* number of excess relsets required */
+	double target_density;        /* target number of nonzeros per cycle */
 	double avg_cycle_weight;      /* the avg number of nonzeros per cycle */
 	uint32 max_relations;         /* largest relations in a relation set */
 	relation_set_t *relset_array; /* current list of relation sets */
@@ -138,7 +139,7 @@ void filter_purge_singletons_core(msieve_obj *obj, filter_t *filter);
    of relations. min_cycles is the absolute minimum number of
    relation sets that are required */
 
-void filter_make_relsets(msieve_obj *obj, filter_t *filter, 
+int32 filter_make_relsets(msieve_obj *obj, filter_t *filter, 
 			merge_t *merge, uint32 min_cycles);
 
 /* perform post-processing optimizations on the collection of cycles

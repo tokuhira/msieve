@@ -9,7 +9,7 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.	
 
-$Id$
+$Id: batch_factor.h 638 2011-09-11 15:31:19Z jasonp_sf $
 --------------------------------------------------------------------*/
 
 #ifndef _BATCH_FACTOR_H_
@@ -34,12 +34,6 @@ typedef void (*print_relation_t)(savefile_t *savefile, int64 a, uint32 b,
 			uint32 lp_r[MAX_LARGE_PRIMES],
 			uint32 *factors_a, uint32 num_factors_a, 
 			uint32 lp_a[MAX_LARGE_PRIMES]);
-
-/* prototypes for the subsystem that batch-factors the
-   portions of relations that contain large primes. The
-   current system is designed for cofactors containing up to
-   three large primes, though relations with any number of
-   large primes will be batched and factored */
 
 /* simplified representation of one relation. Note that
    any of the factors may be trivial */
@@ -124,9 +118,9 @@ void relation_batch_free(relation_batch_t *rb);
 
 void relation_batch_add(int64 a, uint32 b, 
 			uint32 *factors_r, uint32 num_factors_r, 
-			mp_t *unfactored_r,
+			mpz_t unfactored_r,
 			uint32 *factors_a, uint32 num_factors_a, 
-			mp_t *unfactored_a,
+			mpz_t unfactored_a,
 			relation_batch_t *rb);
 	
 /* factor all the batched relations, saving all the ones whose

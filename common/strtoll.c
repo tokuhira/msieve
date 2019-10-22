@@ -4,7 +4,7 @@ Copyright (c) 1994 Sun Microsystems, Inc.
 
 Modified by Jason Papadopoulos for use within the Msieve library
 
-$Id$
+$Id: strtoll.c 185 2010-01-31 19:03:51Z jaysonking $
 --------------------------------------------------------------------*/
 
 #if defined(_MSC_VER)

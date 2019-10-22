@@ -9,7 +9,7 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.
 
-$Id$
+$Id: prime_sieve.c 228 2010-02-28 23:37:55Z jasonp_sf $
 --------------------------------------------------------------------*/
 
 #include <common.h>

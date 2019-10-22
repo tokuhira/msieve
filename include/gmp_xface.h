@@ -9,7 +9,7 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.	
 
-$Id$
+$Id: gmp_xface.h 26 2009-07-22 14:14:33Z jasonp_sf $
 --------------------------------------------------------------------*/
 
 #ifndef _GMP_XFACE_H_

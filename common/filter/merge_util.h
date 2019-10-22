@@ -9,7 +9,7 @@ useful. Again optionally, if you add to the functionality present here
 please consider making those additions public too, so that others may 
 benefit from your work.	
 
-$Id$
+$Id: merge_util.h 23 2009-07-20 02:59:07Z jasonp_sf $
 --------------------------------------------------------------------*/
 
 #ifndef _COMMON_FILTER_MERGE_UTIL_H_
